@@ -1,0 +1,36 @@
+name: Build 3DS
+on:
+  push:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: devkitpro/devkitarm
+    steps:
+      - uses: actions/checkout@v4
+      - name: Installer les libs 3DS
+        run: |
+          dkp-pacman -Sy --noconfirm
+          dkp-pacman -S --noconfirm 3ds-dev
+      - name: Compiler le 3dsx
+        run: |
+          cp $DEVKITPRO/examples/3ds/templates/application/Makefile ./Makefile
+          make TARGET=piratechest ICON=icon.png APP_TITLE="Pirate Chest" APP_DESCRIPTION="Ouvre des coffres" APP_AUTHOR="Moi" LIBS="-lcitro2d -lcitro3d -lctru -lm"
+          ls -la
+      - name: Fabriquer le CIA
+        continue-on-error: true
+        run: |
+          apt-get update && apt-get install -y curl unzip
+          curl -sL $(curl -s https://api.github.com/repos/3DSGuy/Project_CTR/releases | grep browser_download_url | grep -i 'makerom.*ubuntu' | head -1 | cut -d'"' -f4) -o makerom.zip
+          unzip -o makerom.zip -d mk && chmod +x mk/makerom
+          curl -sL $(curl -s https://api.github.com/repos/Steveice10/bannertool/releases/latest | grep browser_download_url | grep -i zip | head -1 | cut -d'"' -f4) -o bt.zip
+          unzip -o bt.zip -d bt
+          BT=$(find bt -type f -name bannertool -path '*linux*' | head -1); chmod +x "$BT"
+          "$BT" makebanner -i banner.png -a audio.wav -o banner.bnr
+          ./mk/makerom -f cia -o PirateChest.cia -DAPP_ENCRYPTED=false -rsf app.rsf -target t -exefslogo -elf piratechest.elf -icon piratechest.smdh -banner banner.bnr
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PirateChest
+          path: |
+            PirateChest.cia
+            piratechest.3dsx
